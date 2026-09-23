@@ -15,7 +15,7 @@ main{width:100%;max-width:640px;padding:16px}h1{font-size:20px;margin:8px 0}
 .grades button{display:flex;flex-direction:column;gap:2px;font-size:15px}.grades small{font-size:12px;opacity:.85}
 button.g1{background:var(--no)}button.g2{background:#b26a00}button.g3{background:var(--ok)}button.g4{background:#1565c0}button.g{background:#8883;color:var(--fg)}
 [hidden]{display:none!important}.opt{margin-top:14px;display:flex;gap:14px;flex-wrap:wrap;font-size:14px;color:var(--mu);align-items:center}
-select{max-width:100%;padding:6px;border-radius:8px;background:var(--card);color:var(--fg);border:1px solid #8886}
+#fbtn{flex:none;padding:8px 14px;font-size:14px}#fpanel{margin-top:8px;padding:10px 14px;background:var(--card);border-radius:10px;font-size:14px;display:flex;flex-direction:column;gap:8px}#fpanel label{display:flex;gap:8px;align-items:flex-start}#fpanel .lnk{display:flex;gap:16px}#fpanel a{color:var(--ac)}
 .done{text-align:center;padding:30px 0;cursor:default}.done button{flex:none;padding:12px 20px;margin-top:8px}
 </style></head><body><main>
 <h1>Христианское образование — тренажер</h1>
@@ -25,7 +25,8 @@ select{max-width:100%;padding:6px;border-radius:8px;background:var(--card);color
 <div class="row grades" id="grades" hidden>
 <button class="g1" data-g="1"><b>Снова</b><small></small></button><button class="g2" data-g="2"><b>Трудно</b><small></small></button>
 <button class="g3" data-g="3"><b>Хорошо</b><small></small></button><button class="g4" data-g="4"><b>Легко</b><small></small></button></div>
-<div class="opt"><select id="sec"></select></div>
+<div class="opt"><button id="fbtn" class="g"></button></div>
+<div id="fpanel" hidden></div>
 <div class="opt"><label><input type="checkbox" id="rev"> Ответ → вопрос</label><a href="#" id="reset" style="color:var(--mu)">Сбросить прогресс</a></div>
 <div class="opt">Интервальное повторение</div>
 </main><script>
@@ -37,8 +38,17 @@ const hash=s=>{let h=5381;for(const ch of s)h=((h<<5)+h+ch.codePointAt(0))|0;ret
 CARDS.forEach(c=>c.id=hash(c.q));
 let S=ld('srs',{}),cfg=ld('cfg',{}),cur=null,shown=false,earlyQ=[];
 const $=id=>document.getElementById(id);
-$('sec').innerHTML='<option value="">Все разделы</option>'+SECS.map(s=>'<option>'+s+'</option>').join('');
-$('sec').value=cfg.sec||'';$('rev').checked=!!cfg.rev;
+let sel=(cfg.secs||(cfg.sec?[cfg.sec]:[])).filter(s=>SECS.includes(s));
+$('rev').checked=!!cfg.rev;
+$('fpanel').innerHTML='<div class="lnk"><a href="#" id="fall">Выбрать все</a><a href="#" id="fnone">Снять все</a></div>'+SECS.map((s,i)=>'<label><input type="checkbox" data-i="'+i+'"><span></span></label>').join('');
+$('fpanel').querySelectorAll('label').forEach((l,i)=>l.querySelector('span').textContent=SECS[i]);
+function fsync(){$('fpanel').querySelectorAll('input').forEach(b=>b.checked=sel.includes(SECS[+b.dataset.i]));
+$('fbtn').textContent=(sel.length?'Разделы: '+sel.length+' из '+SECS.length:'Все разделы')+($('fpanel').hidden?' ▾':' ▴')}
+function fset(a){sel=a;cfg.secs=sel;delete cfg.sec;sv('cfg',cfg);earlyQ=[];fsync();render()}
+$('fbtn').onclick=()=>{$('fpanel').hidden=!$('fpanel').hidden;fsync()};
+$('fpanel').onchange=()=>fset(SECS.filter((s,i)=>$('fpanel').querySelector('[data-i="'+i+'"]').checked));
+$('fall').onclick=e=>{e.preventDefault();fset(SECS.slice())};$('fnone').onclick=e=>{e.preventDefault();fset([])};
+fsync();
 const get=c=>S[c.id]||{s:'new',step:0,ivl:0,ease:2,due:0,r:0,lapses:0};
 function sched(c,g,now){return{...sched0(c,g,now),lg:g}}
 function sched0(c,g,now){const x={...get(c)};const min=m=>now+m*60000;
@@ -58,7 +68,7 @@ else{const p=x.ivl;
  x.ivl=Math.min(MAX,Math.max(Math.round(x.ivl),p+1));x.due=min(x.ivl)}
 return x}
 function fmt(m){if(m<1)return'<1 мин';if(m<60)return Math.round(m)+' мин';if(m<1440)return(Math.round(m/6)/10+'').replace('.',',')+' ч';return Math.round(m/144)/10+' дн'}
-const pool=()=>CARDS.filter(c=>!$('sec').value||c.t===$('sec').value);
+const pool=()=>CARDS.filter(c=>!sel.length||sel.includes(c.t));
 function pick(){const now=Date.now(),p=pool();
 const l=p.filter(c=>get(c).s!=='new'&&get(c).due<=now).sort((a,b)=>get(a).due-get(b).due);
 if(l[0])return l[0];
@@ -89,7 +99,6 @@ function answer(g){if(!shown||!cur)return;earlyQ=earlyQ.filter(i=>i!==cur.id);S[
 $('show').onclick=reveal;$('card').onclick=()=>shown||reveal();
 document.querySelectorAll('#grades button').forEach(b=>b.onclick=()=>answer(+b.dataset.g));
 $('rev').onchange=()=>{cfg.rev=$('rev').checked;sv('cfg',cfg);render()};
-$('sec').onchange=()=>{cfg.sec=$('sec').value;sv('cfg',cfg);render()};
 $('reset').onclick=e=>{e.preventDefault();if(confirm('Сбросить весь прогресс?')){S={};sv('srs',S);render()}};
 document.onkeydown=e=>{if(e.key===' '||e.key==='Enter'){e.preventDefault();shown?answer(3):reveal()}else if('1234'.includes(e.key)&&e.key)answer(+e.key)};
 setInterval(()=>{if(cur)stats();else render()},5000);
