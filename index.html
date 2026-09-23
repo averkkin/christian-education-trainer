@@ -35,12 +35,13 @@ const ld=(k,d)=>{try{const v=localStorage.getItem(k);return v?JSON.parse(v):d}ca
 const sv=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}};
 const hash=s=>{let h=5381;for(const ch of s)h=((h<<5)+h+ch.codePointAt(0))|0;return(h>>>0).toString(36)};
 CARDS.forEach(c=>c.id=hash(c.q));
-let S=ld('srs',{}),cfg=ld('cfg',{}),cur=null,shown=false,ahead=false;
+let S=ld('srs',{}),cfg=ld('cfg',{}),cur=null,shown=false,earlyQ=[];
 const $=id=>document.getElementById(id);
 $('sec').innerHTML='<option value="">Все разделы</option>'+SECS.map(s=>'<option>'+s+'</option>').join('');
 $('sec').value=cfg.sec||'';$('rev').checked=!!cfg.rev;
 const get=c=>S[c.id]||{s:'new',step:0,ivl:0,ease:2,due:0,r:0,lapses:0};
-function sched(c,g,now){const x={...get(c)};const min=m=>now+m*60000;
+function sched(c,g,now){return{...sched0(c,g,now),lg:g}}
+function sched0(c,g,now){const x={...get(c)};const min=m=>now+m*60000;
 if(x.s==='new'){x.s='learn';x.step=0;x.r=0}
 if(x.s==='learn'){const st=x.r?RELEARN:STEPS;
  if(g===1){x.step=0;x.due=min(AGAIN)}
@@ -59,8 +60,12 @@ return x}
 function fmt(m){if(m<1)return'<1 мин';if(m<60)return Math.round(m)+' мин';if(m<1440)return(Math.round(m/6)/10+'').replace('.',',')+' ч';return Math.round(m/144)/10+' дн'}
 const pool=()=>CARDS.filter(c=>!$('sec').value||c.t===$('sec').value);
 function pick(){const now=Date.now(),p=pool();
-const l=p.filter(c=>get(c).s!=='new'&&(ahead||get(c).due<=now)).sort((a,b)=>get(a).due-get(b).due);
-ahead=false;return l[0]||p.find(c=>get(c).s==='new')||null}
+const l=p.filter(c=>get(c).s!=='new'&&get(c).due<=now).sort((a,b)=>get(a).due-get(b).due);
+if(l[0])return l[0];
+while(earlyQ.length){const id=earlyQ.shift(),c=p.find(c=>c.id===id);if(c&&get(c).s!=='new')return c}
+return p.find(c=>get(c).s==='new')||null}
+function early(){const p=pool().filter(c=>get(c).s!=='new').sort((a,b)=>get(a).due-get(b).due);
+const w=p.filter(c=>get(c).lg<=2);earlyQ=(w.length?w:p).map(c=>c.id)}
 function stats(){const now=Date.now(),p=pool();let n=0,l=0,r=0,k=0;
 for(const c of p){const x=get(c);if(x.s==='new')n++;else{if(x.s==='review')k++;if(x.due<=now)x.s==='learn'?l++:r++}}
 $('s1').textContent='Новые: '+n+' · Учатся: '+l+' · Повторить: '+r;$('s2').textContent='В повторении: '+k+' / '+p.length;$('b').style.width=(p.length?k/p.length*100:0)+'%'}
@@ -69,7 +74,7 @@ cur=pick();const e=$('card');
 if(!cur){const p=pool().filter(c=>get(c).s!=='new');
  e.innerHTML='<div class="done"><h2>Пока всё 🎉</h2><p></p><button id="early" hidden>Учить досрочно</button></div>';
  if(p.length){const t=Math.min(...p.map(c=>get(c).due));e.querySelector('p').textContent='Следующая карточка через '+fmt(Math.max(0,(t-Date.now())/60000))+'. Страницу можно не закрывать — она сама покажет карточку.';
-  const b=$('early');b.hidden=false;b.onclick=e=>{e.stopPropagation();ahead=true;render()}}
+  const b=$('early');b.hidden=false;b.onclick=e=>{e.stopPropagation();early();render()}}
  else e.querySelector('p').textContent='В этом разделе нет карточек.';
  $('show').hidden=true;return}
 const r=$('rev').checked;
@@ -80,7 +85,7 @@ function reveal(){if(!cur||shown)return;shown=true;const r=$('rev').checked,now=
 const d=document.createElement('div');d.className='a';const l=document.createElement('div');l.className='lbl';l.textContent=r?'Вопрос':'Ответ';const t=document.createElement('div');t.textContent=r?cur.q:cur.a;d.append(l,t);$('card').append(d);
 document.querySelectorAll('#grades button').forEach(b=>b.querySelector('small').textContent=fmt((sched(cur,+b.dataset.g,now).due-now)/60000));
 $('show').hidden=true;$('grades').hidden=false}
-function answer(g){if(!shown||!cur)return;S[cur.id]=sched(cur,g,Date.now());sv('srs',S);render()}
+function answer(g){if(!shown||!cur)return;earlyQ=earlyQ.filter(i=>i!==cur.id);S[cur.id]=sched(cur,g,Date.now());sv('srs',S);render()}
 $('show').onclick=reveal;$('card').onclick=()=>shown||reveal();
 document.querySelectorAll('#grades button').forEach(b=>b.onclick=()=>answer(+b.dataset.g));
 $('rev').onchange=()=>{cfg.rev=$('rev').checked;sv('cfg',cfg);render()};
