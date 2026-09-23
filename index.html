@@ -69,7 +69,7 @@ cur=pick();const e=$('card');
 if(!cur){const p=pool().filter(c=>get(c).s!=='new');
  e.innerHTML='<div class="done"><h2>Пока всё 🎉</h2><p></p><button id="early" hidden>Учить досрочно</button></div>';
  if(p.length){const t=Math.min(...p.map(c=>get(c).due));e.querySelector('p').textContent='Следующая карточка через '+fmt(Math.max(0,(t-Date.now())/60000))+'. Страницу можно не закрывать — она сама покажет карточку.';
-  const b=$('early');b.hidden=false;b.onclick=()=>{ahead=true;render()}}
+  const b=$('early');b.hidden=false;b.onclick=e=>{e.stopPropagation();ahead=true;render()}}
  else e.querySelector('p').textContent='В этом разделе нет карточек.';
  $('show').hidden=true;return}
 const r=$('rev').checked;
